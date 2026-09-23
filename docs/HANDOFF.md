@@ -1,0 +1,143 @@
+# 遮脸工具项目交接（2026-09-23，Claude Fable 5.1 → 后续模型）
+
+面向能访问本机文件的接手模型。本文只记录事实、决定和未完成事项，不要求接受我的判断；所有数字都可用文中脚本复现。
+
+---
+
+## 0. 三十秒版本
+
+- **目标**：给同事用的 Windows 批处理工具：把短视频里人物的脸用黑色椭圆遮住，标准是**稳定挡住眼睛**；背影不遮；远处很小的人物不管。
+- **现状**：工具 0.1.1 已完成第一版，代码在 GitHub 私有仓库，Windows 安装包由 GitHub Actions 自动打出（build #3 成功）。**用户正准备自己在一台 Windows 电脑上做首次实测**，结果尚未回来。
+- **接手后第一件事**：等用户回传 Windows 测试结果（处理日志、`--diagnose` 输出、报错），据此修问题；然后做新片盲测。
+- **红线**：原项目目录只读；视频不上传；下载/安装任何东西先问；动用户的 GitHub 账号先问。
+
+---
+
+## 1. 用户与沟通方式
+
+- 用户阿昕，编导/短视频从业者，**不是程序员**。先说结论，少术语，一步一步；他会看图和成片来判断，不看代码。
+- 他对"如实说明限制"很在意：没验证过的不要说验证过；抽帧看过 ≠ 逐帧看过；自动结果不是验收。
+- 决定权在他：模式、规则、要不要下载、要不要动账号。他答应过的事（下载模型、建 GitHub 仓库和部署密钥、装 brew 的 python-tk）都记录在下面，其余仍需再问。
+- 项目记忆文件（Claude Code 自动记忆）：`/Users/xin/.claude/projects/-Users-xin-Desktop-xin-claude-file------/memory/eye-bar-tool-project.md`，索引在同目录 `MEMORY.md`。
+
+## 2. 规则演变（按时间）
+
+| 日期 | 用户原话/决定 | 含义 |
+|---|---|---|
+| 09-20 前 | 眼部黑条要精确、不乱飞（Codex 时期） | 原需求 |
+| 09-22 | 「我们是可以将整个人物的脸都打上黑码，可以是椭圆形等形状，就是把人物脸部大体挡住」 | 不再需要精确眼条 |
+| 09-22 | 「只要你能稳定地挡掉眼睛就可以」 | **验收标准** |
+| 09-23 | 远处很小的人物不用考虑 | 不做分块放大检测 |
+| 09-23 | 一定要适配 Windows | 硬要求 |
+| 09-23 | 背影不用遮挡 | 默认模式＝"除纯背面"（smart） |
+| 09-23 | 「你下载安装是有啥用啊？」 | 不要把安装包下到 Mac，同事直接从 GitHub 下 |
+
+## 3. 目录地图（全部本机绝对路径）
+
+### 3.1 我的工作目录 `/Users/xin/Desktop/xin-claude-file/打黑条工具/`
+| 路径 | 内容 |
+|---|---|
+| `face-mask-tool/` | **产品代码仓库**（git，远程 `origin = git@github-facemask:pudding0590-del/face-mask-tool.git`）。见第 5 节 |
+| `tool/` | 引擎实验室：`.venv`（Python 3.12，rtmlib/onnxruntime/opencv/mediapipe 0.10.32）；`extract_pose.py` 抽关键点；`eval_engine.py` 同尺子评估；`proto_face.py / compare_face.py / sheet_face.py`（v6 流程，环境变量 `POSE_DIR` / `PROTO_ROOT` 切换引擎）；`keypoints/<engine>/NN.json`（五个引擎的 20 条关键点）；`eval/<engine>/`（评估表、遮罩、抽图）；`models/`（MediaPipe 模型，已淘汰） |
+| `独立分析_2026-09-21/` | 09-21/22 的分析：`分析报告.md`、`分析报告_规则更新_2026-09-22.md`、`证据图/`27 张、`脚本/`、`数据/`（Vision 关键点、v6 遮罩、评估表）、`原型成片_脸部椭圆/`（24 条 v6 成片，macOS Vision 引擎） |
+| `Windows版实施规划_2026-09-23.md` | 五步规划，第 1/3/4 步已标完成；第七节是无 Windows 电脑时的方案与价格 |
+| `Windows版所需配置_2026-09-23.md` | 同事电脑/打包电脑/软件清单/许可证；**五个引擎实测表**；Windows 打包实测 |
+| `Windows安装包使用说明.md` | 给同事的说明 + 测试清单（与安装包内 `使用说明.txt`、`测试清单.md` 同源） |
+| `out_test/` | Mac 上端到端测试的输出（09/12/04），可删 |
+
+### 3.2 只读的原项目
+- `/Users/xin/Documents/ChatGPT/打黑条功能开发/`：Codex 做的两轮实验（交接文档 `项目交接_眼部黑条_2026-09-20.md`；`round2/app` 是人工修正网页工具，第二版可改成椭圆复用；`benchmark/prototype/eyebar/media.py` 是导出/验收代码的来源）。**不要改、不要 git clean**。它的 `.venv` 是旧环境，我没动。
+- `/Users/xin/.codex/.chatgpt-projects/g-p-6aa50e33b6c88191b8f71c751b9eea18/`：更早的原始项目。**20 条原片**在 `output/黑条软件首轮测试/原片副本/NN.mp4`（清单与 SHA256 在原项目 `benchmark/provenance/source_manifest.json`）；**人工验收版逐帧黑条坐标**（3124 个人物×帧，9 月 17 日）在 `output/眼部黑条处理记录/2026-09-17/NN/masks.json`——这是最密的参照，但偏大偏保守、不是眼睛真值。
+
+### 3.3 账号与凭据（不要外传，不要打印私钥）
+- GitHub 用户名 **pudding0590-del**（用户自己注册、浏览器已登录）。仓库 `face-mask-tool` 私有。
+- 部署密钥：`~/.ssh/id_ed25519_facemask`（仅此仓库 Read/write），`~/.ssh/config` 里别名 `github-facemask`；`ssh -T git@github-facemask` 应回 "successfully authenticated"。
+- 浏览器控制：Tabbit（skill `tabbit`，命令 `~/.local/bin/tabbit-cli`）。用它建了仓库、加了密钥、看了 Actions。注意：程序里读不到我的环境变量（要把值写进程序文本）、单次程序硬上限 180 秒、任务用完 `finish`。
+- `gh` CLI 未安装。
+
+## 4. 技术结论与数字（可复现）
+
+### 4.1 为什么是现在这条路线
+- 09-21 分析：原方案问题在链路不在模型——每帧独立算几何（乱飞/闪烁）、误检无轨迹过滤、不判断眼睛是否可见、评估只抽静态图。人脸关键点模型对看不见的脸也会脑补整套点位，所以换 PIPNet/3DDFA 无效。
+- 方案：**人体姿态找头 → 按人跟踪 → 整段平滑（头部尺寸不低于最近 5 秒最大值的 85%）→ 椭圆（约 1.6× 头宽，转头前后各多留 0.25 秒）**。三种模式：face（仅正侧脸）/ **smart（除纯背面，默认）** / head（含背面）。
+- 引擎实测（Mac M5 Pro CPU，20 条，与人工验收版比对；表在《Windows版所需配置》）：
+
+| 引擎 | 每帧 | 背对时能否分辨 | 眼睛可见画面 中心/整条 | 结论 |
+|---|---:|---|---|---|
+| macOS Vision | — | 能 | 100% / 88% | 09-22 参照，Windows 不可用 |
+| **RTMO-m** | 68 ms | 能（一致率 93%） | 100% / 89% | **默认** |
+| **RTMO-s** | 42 ms | 能（90%） | 100% / 88% | **快速模式** |
+| RTMPose-m/s + YOLOX | 122 / 31 ms | 不能（背影也给脸部点 0.5–0.6） | 100% / 98% | 只能当"含背面"用；用户已选背影不遮，故不用 |
+| MediaPipe Pose 0.10 | 19 ms | 不能 | 66% / 38% | 淘汰 |
+- 稳定性：v6 位置/角度/大小突跳 ≤3 次（旧方案 75/175/14，第二轮候选 227/370/234）；6 条背影片零误加。
+- 远处极小人物（09 号片车边，头宽约 27 像素）所有引擎 0 命中——用户已决定不管。
+- 复现：`cd tool && .venv/bin/python eval_engine.py rtmo-m`（读 `keypoints/rtmo-m`，写 `eval/rtmo-m/评估表.txt`）。评估里"眼睛可见"的划分固定用 Vision 关键点作参照，换引擎不变。
+
+### 4.2 评估的边界
+- 人工验收版不是真值；"整条盖住"天然偏向大遮罩。
+- 20 条片已被反复看过、调过参数，**是"见过的样本"**；结论要靠新片盲测。
+- 09 号片 146–161 帧曾因轨迹断开漏 16 帧，v3 起用"最近 1 秒中位尺寸"做跟踪门限修好；仍要留意深低头、快速下蹲。
+
+## 5. 产品代码 `face-mask-tool/`（0.1.1，commit fd2d311）
+
+| 文件 | 职责 |
+|---|---|
+| `facemask/media.py` | ffprobe/ffmpeg：探测、`decode_frames`（管道解码 bgr24，自动按旋转标记转正）、`render`（保时间戳导出、音频原样复制、不覆盖）、`verify`（9 项检查：尺寸/时间戳/时长/容器时长/音轨数/音频包哈希/音频时长/完整解码/遮罩为黑）。从原项目 media.py 移植，放宽了旋转视频和非 AAC 音频；HDR/10 位仍拒绝 |
+| `facemask/engine.py` | `PoseEngine`：rtmlib 的 RTMO，onnxruntime CPU；`ensure_model` 先找 `models/`，允许时才下载并复制进去（打包后离线） |
+| `facemask/masks.py` | v6 算法库：`observe/track/build_masks`，返回逐帧多边形 + 每条轨迹的区间（已遮/看到未遮/补帧）供复核提示 |
+| `facemask/pipeline.py` | 单条视频全流程 + 每秒一帧对照图 + `可疑片段.txt` + `检查记录.json` |
+| `facemask/cli.py` | `run_batch`（供 CLI 与 GUI 共用；写 `处理日志.txt`、`任务清单.json`；单条失败不中断）；`--diagnose` |
+| `facemask/gui.py` | Tk 窗口（选文件夹/模式/速度/开始/停止/打开输出）；崩溃写 `遮脸工具_错误.log` 并弹窗；Windows 下开 DPI 感知 |
+| `facemask/__main__.py` / `run.py` | 无参数开窗口，有参数走命令行 |
+| `facemask.spec` | PyInstaller 单文件夹，两个入口：`遮脸工具.exe`（无控制台）、`facemask-cli.exe`（控制台）；`models/*.onnx` 与 `bin/*` 打进 `_internal/` |
+| `scripts/fetch_models.py` | 下载两个 RTMO 模型到 `models/` |
+| `scripts/fetch_ffmpeg.py` | 下载 BtbN win64-gpl 静态构建，取 ffmpeg.exe/ffprobe.exe/LICENSE 到 `bin/` |
+| `scripts/smoke_test.py` | 合成含中文文件名的 2 秒视频跑全流程 |
+| `.github/workflows/build-windows.yml` | push main 触发：装依赖 → 下模型 → 下 FFmpeg → 导入检查 → 源码自测 → PyInstaller → 打包后自测 → 附文档 → zip → 上传产物（保留 3 天）。`PYTHONUTF8=1` |
+| `docs/使用说明.txt`、`docs/测试清单.md` | 打进安装包根目录 |
+
+本机运行/测试（Mac，用 `tool/.venv`）：
+```
+cd /Users/xin/Desktop/xin-claude-file/打黑条工具/face-mask-tool
+../tool/.venv/bin/python -m facemask /path/to/视频或文件夹 --output /path/to/输出    # 命令行
+../tool/.venv/bin/python -m facemask                                                  # 窗口（Mac 已装 python-tk@3.12）
+../tool/.venv/bin/python scripts/smoke_test.py
+../tool/.venv/bin/python -m facemask --diagnose
+```
+输出约定：`黑条版/原名_遮脸.mp4`、`原名_对照图.jpg`、`原名_可疑片段.txt`、`原名_检查记录.json`、`处理日志.txt`、`任务清单.json`。
+
+构建与产物：推送到 main 自动构建（约 8–10 分钟，私有仓库每月 2,000 分钟免费，不绑支付方式超额只会停）。产物在 GitHub → Actions → 该次运行 → Artifacts → `facemask-windows-x64`（zip 349 MB，解压 672 MB：ffmpeg 两个程序约 250 MB、模型 123 MB）。构建历史：#1 失败（Windows 控制台 cp1252 打印中文崩溃，流水线本身已通）；#2 成功；**#3 成功 = 0.1.1，用户实测用这个**。提交信息带 `[skip ci]` 可不触发构建。
+
+## 6. 已知问题与坑（接手最容易踩的）
+
+1. **不要在 Mac 上下载安装包**：GitHub 产物走 Azure 存储，这条线路只有 ~40 KB/s，用户已明确没必要。产物链接需要登录态，两跳 307 后才是公开临时地址。
+2. **HDR / 10 位视频被拒绝**（iPhone 高动态范围录像常见）。要支持需改导出：把遮罩当第二路输入用 ffmpeg overlay，保留 10 位与色彩元数据。是下一版可能最先撞到的需求。
+3. RTMO 背对判定一致率 93%：04 号片扶帽子那 1 秒会在后脑勺上多一个遮罩，无害。
+4. `masks.py` 参数是在 20 条片上调的：椭圆 0.80/0.92 头宽、中心下移 0.12、迟滞 0.5/0.3、补帧 0.6 秒、前后各 0.25 秒。改任何参数都要重跑 `compare_face.py` 看回归。
+5. 多人交叉时是贪心最近邻跟踪，可能短暂串号（两人都被遮，不会漏）；转场未检测（原项目有 `is_cut`，可移植）。
+6. Mac 上 Homebrew Python 默认无 Tk，已 `brew install python-tk@3.12`（Tk 9.0）；`screencapture` 无录屏权限截不了图。
+7. mediapipe 1.0.1 在 Mac 上崩（Metal），0.10.32 正常；已淘汰不用管。
+8. zsh 里 `status` 是只读变量，脚本别用它做变量名。
+9. Windows 控制台编码：CI 用 `PYTHONUTF8=1`；CLI 里 `stdout.reconfigure(errors="replace")`。
+10. 原项目 `pipeline.py` 有缓存不失效的问题（交接文档写了），与新工具无关。
+11. 别把输出文件夹当输入再跑一遍（会生成 `_遮脸_遮脸.mp4`）；工具已禁止输出目录位于输入目录内，但不禁止反向。
+12. PyInstaller 6 单文件夹布局：数据在 `dist/facemask/_internal/`，`bundle_root()` 用 `sys._MEIPASS` 指向它；`遮脸工具.exe` 无控制台，`print` 会静默。
+13. 许可证：rtmlib/RTMO Apache-2.0（训练数据集各有研究条款，对外销售需法务过目）；ffmpeg 用 GPL 构建作独立进程调用；避开 Ultralytics（AGPL）。
+
+## 7. 待办（按优先级）
+
+1. **处理用户的 Windows 首测反馈**：看 `处理日志.txt`（每条用时）、`--diagnose`、报错；修 bug 后推送 → 新构建 → 让用户重下。
+2. **新片盲测**：用户给 3–5 条没见过的片，不调参数直接跑；看对照图和可疑片段。
+3. 安装包瘦身（目标 ~400 MB 解压）：换更小的 ffmpeg 构建或只带 ffmpeg 不带 ffprobe（需改 media.py 用 ffmpeg 代替 ffprobe）。
+4. 速度：可选 `onnxruntime-directml` GPU 版（要单独打一版包）；"快速模式"降推理分辨率。
+5. HDR/10 位支持（见坑 2）。
+6. 人工修正界面：原项目 `round2/app`（server.py/index.html/corrections.py 共 243 行）改成椭圆。
+7. 转场检测、多人交叉的轨迹稳健性。
+8. 代码签名（去掉 SmartScreen 提示，需公司证书）。
+
+## 8. 工作纪律（用户确认过的）
+
+- 原项目目录只读；视频不上传；每次算法改动跑同一套回归（`tool/compare_face.py` 或产品里等价流程）并保留失败证据；新实验用独立目录。
+- 下载模型/pip 包、动 GitHub 账号、买云服务器：先问再做。已获批：下载 RTMO/RTMPose/MediaPipe 模型与依赖到 `tool/`、建仓库与部署密钥、`brew install python-tk@3.12`。
+- 给同事的文档用大白话，每条输出"先看对照图，再看可疑片段，最后回看成片"。
+- 报告数字时同时给分母和口径（易片/难片、眼睛可见/背对、中心/整条）。
