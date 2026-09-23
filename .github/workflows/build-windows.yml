@@ -23,6 +23,8 @@ jobs:
         run: python scripts/fetch_models.py
       - name: Download FFmpeg
         run: python scripts/fetch_ffmpeg.py
+      - name: Import check (window module needs Tk)
+        run: python -c "import facemask.gui, facemask.cli; print('imports ok')"
       - name: Smoke test from source (ffmpeg + model + pipeline on Windows)
         run: python scripts/smoke_test.py
       - name: Build one-folder app
@@ -35,6 +37,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "built app failed" }
           Get-ChildItem smoke_out
           "size of dist/facemask: {0:N0} MB" -f ((Get-ChildItem dist/facemask -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+      - name: Add docs next to the exe
+        shell: pwsh
+        run: |
+          Copy-Item docs/使用说明.txt dist/facemask/
+          Copy-Item docs/测试清单.md dist/facemask/
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path dist/facemask -DestinationPath facemask-windows-x64.zip

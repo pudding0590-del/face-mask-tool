@@ -135,13 +135,34 @@ class App:
 
 
 def main():
-    root = tk.Tk()
+    import traceback
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)   # crisp text on scaled displays
+        except Exception:
+            pass
     try:
-        ttk.Style().theme_use("vista" if sys.platform.startswith("win") else "clam")
-    except tk.TclError:
-        pass
-    App(root)
-    root.mainloop()
+        root = tk.Tk()
+        try:
+            ttk.Style().theme_use("vista" if sys.platform.startswith("win") else "clam")
+        except tk.TclError:
+            pass
+        App(root)
+        root.mainloop()
+    except Exception:
+        text = traceback.format_exc()
+        try:   # a windowed app has no console: leave a log next to the program and show a box
+            log = Path(getattr(sys, "executable", __file__)).resolve().parent / "遮脸工具_错误.log"
+            log.write_text(text, encoding="utf-8")
+        except Exception:
+            log = None
+        try:
+            tk.Tk().withdraw()
+            messagebox.showerror("遮脸工具出错", f"程序出错，请把这段话发给开发者：\n\n{text[-1500:]}\n\n（已保存到 {log}）")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":
