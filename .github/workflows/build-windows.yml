@@ -7,6 +7,9 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,11 +30,11 @@ jobs:
       - name: Smoke test the built app
         shell: pwsh
         run: |
-          ffmpeg -v error -f lavfi -i testsrc=size=640x360:rate=30 -t 1 -pix_fmt yuv420p smoke.mp4
-          ./dist/facemask/facemask-cli.exe smoke.mp4 --output smoke_out --no-download
+          ./bin/ffmpeg.exe -v error -f lavfi -i testsrc=size=640x360:rate=30 -t 1 -pix_fmt yuv420p "冒烟 测试.mp4"
+          ./dist/facemask/facemask-cli.exe "冒烟 测试.mp4" --output smoke_out --no-download
+          if ($LASTEXITCODE -ne 0) { throw "built app failed" }
           Get-ChildItem smoke_out
-        env:
-          PATH: ${{ github.workspace }}\bin;${{ env.PATH }}
+          "size of dist/facemask: {0:N0} MB" -f ((Get-ChildItem dist/facemask -Recurse | Measure-Object Length -Sum).Sum / 1MB)
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path dist/facemask -DestinationPath facemask-windows-x64.zip

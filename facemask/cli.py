@@ -50,6 +50,9 @@ def run_batch(inputs, output, mode="smart", engine_name="rtmo-m", download=True,
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):   # Windows consoles may not be UTF-8; never crash on a Chinese file name
+        if stream and hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     p = argparse.ArgumentParser(prog="facemask", description="批量给视频人物脸部打黑色椭圆遮罩（离线、本机处理，原片只读）。")
     p.add_argument("inputs", nargs="+", help="视频文件或文件夹（可多个，含子文件夹；支持中文路径）")
     p.add_argument("--output", "-o", help="输出文件夹（默认：第一个输入旁边的“黑条版”）")

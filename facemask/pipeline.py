@@ -68,7 +68,8 @@ def review_notes(segments, people_per_frame, fps):
             if b - a + 1 >= fps * .3:
                 lines.append(f"{t(a)}–{t(b + 1)}  {who}：看到头但判定为背对/脸不可见，未遮 ← 请确认")
         for a, b in s["filled_gaps"]:
-            lines.append(f"{t(a)}–{t(b + 1)}  {who}：识别短暂丢失，按前后位置补上 ← 请确认")
+            if b - a + 1 >= fps * .2:   # single dropped frames are routine; only flag gaps a viewer could notice
+                lines.append(f"{t(a)}–{t(b + 1)}  {who}：识别短暂丢失，按前后位置补上 ← 请确认")
     empty = masks._runs([len(p) == 0 for p in people_per_frame])
     for a, b in empty:
         if b - a + 1 >= fps * .5:
