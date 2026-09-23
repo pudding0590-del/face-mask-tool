@@ -1,0 +1,42 @@
+name: build-windows
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: Download pose models
+        run: python scripts/fetch_models.py
+      - name: Download FFmpeg
+        run: python scripts/fetch_ffmpeg.py
+      - name: Smoke test from source (ffmpeg + model + pipeline on Windows)
+        run: python scripts/smoke_test.py
+      - name: Build one-folder app
+        run: pyinstaller --noconfirm facemask.spec
+      - name: Smoke test the built app
+        shell: pwsh
+        run: |
+          ffmpeg -v error -f lavfi -i testsrc=size=640x360:rate=30 -t 1 -pix_fmt yuv420p smoke.mp4
+          ./dist/facemask/facemask-cli.exe smoke.mp4 --output smoke_out --no-download
+          Get-ChildItem smoke_out
+        env:
+          PATH: ${{ github.workspace }}\bin;${{ env.PATH }}
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/facemask -DestinationPath facemask-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: facemask-windows-x64
+          path: facemask-windows-x64.zip
+          retention-days: 3

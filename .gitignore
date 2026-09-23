@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+models/
+dist/
+build/
+*.spec.bak
+*.mp4
+*.mov
+*.MOV
+*.MP4
+out/
+keypoints/
+eval/
