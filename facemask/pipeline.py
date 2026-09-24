@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from . import media, masks
+from . import scene as scenes
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".m4v"}
 
@@ -70,6 +71,9 @@ def review_notes(segments, people_per_frame, fps):
         for a, b in s["filled_gaps"]:
             if b - a + 1 >= fps * .2:   # single dropped frames are routine; only flag gaps a viewer could notice
                 lines.append(f"{t(a)}–{t(b + 1)}  {who}：识别短暂丢失，按前后位置补上 ← 请确认")
+        for a, b in s.get("statue_spans", []):
+            if b - a + 1 >= fps * .3:
+                lines.append(f"{t(a)}–{t(b + 1)}  {who}：判定为雕像/塑像等非真人，未遮 ← 请确认")
     empty = masks._runs([len(p) == 0 for p in people_per_frame])
     for a, b in empty:
         if b - a + 1 >= fps * .5:
@@ -90,14 +94,20 @@ def process_video(source, out_dir, engine, mode="smart", progress=None):
     w, h = media.display_size(v)
     fps = float(Fraction(v["r_frame_rate"]))
     people_per_frame = []
+    analyzer = scenes.SceneAnalyzer(w, h)
     for i, frame in enumerate(media.decode_frames(source, w, h)):
-        people_per_frame.append(engine(frame))
+        people = engine(frame)
+        analyzer.add(frame, people)
+        people_per_frame.append(people)
         if i % 30 == 0:
             say("识别", i, len(times))
     if len(people_per_frame) != len(times):
         raise RuntimeError(f"解码帧数 {len(people_per_frame)} 与时间戳数 {len(times)} 不符。")
     t1 = time.perf_counter()
-    frames, segments = masks.build_masks(people_per_frame, fps, mode)
+    cuts = analyzer.cuts()
+    frames, segments = masks.build_masks(people_per_frame, fps, mode, cuts=cuts, frame_size=(w, h),
+                                         shape=getattr(engine, "mask_shape", None),
+                                         statue=lambda t: scenes.statue_evidence(t, fps, colour=float(np.median(analyzer.colour)), min_side=min(w, h)))
     sheet = ContactSheet(fps)
     verification = media.render(source, out_video, frames, meta, times, on_frame=sheet.add,
                                 progress=lambda n, total: say("导出", n, total))
@@ -107,6 +117,7 @@ def process_video(source, out_dir, engine, mode="smart", progress=None):
         "source": str(source), "source_sha256": media.sha256(source), "output": str(out_video),
         "engine": engine.name, "mode": mode, "fps": fps, "width": w, "height": h, "frames": len(times),
         "frames_with_mask": sum(1 for f in frames if f["bars"]), "tracks": len(segments),
+        "cuts": cuts, "statue_tracks": sum(1 for s in segments if (s.get("statue") or {}).get("statue")),
         "seconds_pose": round(t1 - t0, 1), "seconds_total": round(time.perf_counter() - t0, 1),
         "verification": verification, "contact_sheet": str(sheet_path) if sheet_path else None,
         "review_notes": notes, "masks": frames, "segments": segments,
